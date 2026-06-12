@@ -16,11 +16,10 @@ const Home = () => {
 
   // ✅ Fixed typos in options
   const options = [
-    { value: 'html-css', label: 'HTML + CSS' },
-    { value: 'java', label: 'JAVA' },
-    { value: 'react-tailwind', label: 'REACT+TAILWIND' },
-    { value: 'html-css-js', label: 'HTML + CSS + JS' },
-    { value: 'html-tailwind-bootstrap', label: 'HTML + Tailwind + Bootstrap' },
+    { value: 'html-css', label: 'HTML + CSS', lang: 'html', ext: 'html' },
+    { value: 'javascript', label: 'JavaScript', lang: 'javascript', ext: 'js' },
+    { value: 'react-tailwind', label: 'React + Tailwind', lang: 'javascript', ext: 'jsx' },
+    { value: 'html-css-js', label: 'HTML + CSS + JS', lang: 'html', ext: 'html' },
   ];
 
   const [outputScreen, setOutputScreen] = useState(false);
@@ -40,42 +39,134 @@ const Home = () => {
 
   // ⚠️ API Key (you said you want it inside the file)
   const ai = new GoogleGenAI({
-    apiKey: ""
+    apiKey: "AIzaSyArxSoJxKcG0SXmtq1TP9rn0nnYBpVU5pI"
   });
 
-  // ✅ Generate code
+  // ✅ Check if prompt technology matches selected technology
+  function checkTechMismatch() {
+    const lowerPrompt = prompt.toLowerCase();
+
+    // Keywords that indicate specific technologies
+    const techKeywords = {
+      react: ['react', 'jsx', 'usestate', 'useeffect', 'component', 'props', 'hooks', 'redux', 'next.js', 'nextjs'],
+      tailwind: ['tailwind', 'tailwindcss', 'tw-', 'className='],
+      bootstrap: ['bootstrap', 'btn-primary', 'container-fluid', 'navbar-expand', 'col-md', 'col-lg', 'row'],
+      vue: ['vue', 'vuejs', 'v-if', 'v-for', 'v-model', 'nuxt'],
+      angular: ['angular', 'ng-', 'ngmodel', 'ngfor', 'ngif', 'typescript component'],
+      javascript: ['vanilla js', 'vanilla javascript', 'pure javascript', 'pure js', 'document.createelement', 'dom manipulation'],
+      jquery: ['jquery', '$.ajax', '$(document)'],
+      python: ['python', 'django', 'flask', 'fastapi', 'pandas', 'numpy'],
+      java: ['java ', 'spring boot', 'springboot', 'servlet', 'maven', 'gradle'],
+      cpp: ['c++', 'cpp', 'c plus plus'],
+      csharp: ['c#', 'csharp', '.net', 'dotnet', 'asp.net', 'blazor'],
+      ruby: ['ruby', 'rails', 'ruby on rails'],
+      php: ['php', 'laravel', 'symfony', 'codeigniter'],
+      golang: ['golang', 'go lang'],
+      rust: ['rust', 'cargo'],
+      swift: ['swift', 'swiftui'],
+      kotlin: ['kotlin'],
+      typescript: ['typescript'],
+    };
+
+    // What each selected option should NOT contain
+    const conflicts = {
+      'html-css': {
+        blockedTechs: ['react', 'tailwind', 'bootstrap', 'vue', 'angular', 'javascript', 'jquery', 'python', 'java', 'cpp', 'csharp', 'ruby', 'php', 'golang', 'rust', 'swift', 'kotlin', 'typescript'],
+        message: 'Your prompt mentions a different technology. You selected "HTML + CSS" — please select the matching framework or update your prompt.'
+      },
+      'javascript': {
+        blockedTechs: ['react', 'tailwind', 'bootstrap', 'vue', 'angular', 'jquery', 'python', 'java', 'cpp', 'csharp', 'ruby', 'php', 'golang', 'rust', 'swift', 'kotlin', 'typescript'],
+        message: 'Your prompt mentions a different language. You selected "JavaScript" — your prompt should only describe JavaScript components. Please update your prompt or select the correct technology.'
+      },
+      'react-tailwind': {
+        blockedTechs: ['vue', 'angular', 'bootstrap', 'html', 'jquery', 'python', 'java', 'cpp', 'csharp', 'ruby', 'php', 'golang', 'rust', 'swift', 'kotlin'],
+        message: 'Your prompt mentions a different technology. You selected "React + Tailwind" — please select the matching framework or update your prompt.'
+      },
+      'html-css-js': {
+        blockedTechs: ['react', 'tailwind', 'bootstrap', 'vue', 'angular', 'jquery', 'python', 'java', 'cpp', 'csharp', 'ruby', 'php', 'golang', 'rust', 'swift', 'kotlin', 'typescript'],
+        message: 'Your prompt mentions a different technology. You selected "HTML + CSS + JS" — please select the matching framework or update your prompt.'
+      },
+    };
+
+    const conflict = conflicts[frameWork.value];
+    if (!conflict) return null;
+
+    for (const tech of conflict.blockedTechs) {
+      const keywords = techKeywords[tech];
+      if (keywords) {
+        const matchedKeyword = keywords.find(kw => lowerPrompt.includes(kw));
+        if (matchedKeyword) {
+          return conflict.message;
+        }
+      }
+    }
+    return null;
+  }
+
+  // ✅ Generate code with retry logic for API overload
   async function getResponse() {
     if (!prompt.trim()) return toast.error("Please describe your component first");
 
-    try {
-      setLoading(true);
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: `
-     You are an experienced programmer with expertise in web development and UI/UX design. You create modern, animated, and fully responsive UI components. You are highly skilled in HTML, CSS, Tailwind CSS, Bootstrap, JavaScript, React, Next.js, Vue.js, Angular, and more.
+    // Check for tech mismatch
+    const mismatchError = checkTechMismatch();
+    if (mismatchError) return toast.error(mismatchError);
 
-Now, generate a UI component for: ${prompt}  
-Framework to use: ${frameWork.value}  
+    const maxRetries = 3;
+    const contentPrompt = `
+You are an experienced programmer with expertise in web development and UI/UX design.
 
-Requirements:  
-- The code must be clean, well-structured, and easy to understand.  
-- Optimize for SEO where applicable.  
-- Focus on creating a modern, animated, and responsive UI design.  
-- Include high-quality hover effects, shadows, animations, colors, and typography.  
-- Return ONLY the code, formatted properly in **Markdown fenced code blocks**.  
-- Do NOT include explanations, text, comments, or anything else besides the code.  
-- And give the whole code in a single HTML file.
-      `,
-      });
+Generate code for: ${prompt}
+Technology to use: ${frameWork.label}
 
-      setCode(extractCode(response.text));
-      setOutputScreen(true);
-    } catch (error) {
-      console.error(error);
-      toast.error("Something went wrong while generating code");
-    } finally {
-      setLoading(false);
+STRICT RULES:
+- You MUST use ONLY the technology specified above: "${frameWork.label}". Do NOT use any other framework, library, or language.
+- If the technology is "HTML + CSS", use ONLY HTML and CSS. No JavaScript, no Tailwind, no Bootstrap.
+- If the technology is "JavaScript", generate a pure javascript code and donot use UI for it. Focus on the functionality and logic.
+- If the technology is "React + Tailwind", generate a single React component using Tailwind CSS classes. Include the necessary imports and a CDN-based setup so it runs in a single HTML file.
+- If the technology is "HTML + CSS + JS", use only plain HTML, CSS, and vanilla JavaScript. No external frameworks or libraries.
+- The code must be clean, well-structured, and easy to understand.
+- Focus on creating a modern, animated, and responsive UI design.
+- Include high-quality hover effects, shadows, animations, colors, and typography.
+- Return ONLY the code, formatted properly in a Markdown fenced code block.
+- Do NOT include explanations, text, comments outside the code, or anything else besides the code.
+- Give the whole code in a single file.
+`;
+
+    setLoading(true);
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: contentPrompt,
+        });
+
+        setCode(extractCode(response.text));
+        setOutputScreen(true);
+        setLoading(false);
+        return; // Success — exit
+      } catch (error) {
+        console.error(`Attempt ${attempt} failed:`, error);
+
+        const isOverloaded = error?.message?.includes("503") || error?.message?.includes("429") || error?.message?.includes("UNAVAILABLE") || error?.message?.includes("high demand");
+
+        if (isOverloaded && attempt < maxRetries) {
+          const waitTime = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+          toast.info(`⏳ Server is busy. Retrying in ${waitTime / 1000}s... (Attempt ${attempt + 1}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        } else if (isOverloaded) {
+          toast.error("🚫 The AI model is currently overloaded. Please wait a moment and try again.");
+          setLoading(false);
+          return;
+        } else {
+          toast.error("Something went wrong while generating code");
+          setLoading(false);
+          return;
+        }
+      }
     }
+
+    setLoading(false);
   };
 
   // ✅ Copy Code
@@ -94,7 +185,7 @@ Requirements:
   const downnloadFile = () => {
     if (!code.trim()) return toast.error("No code to download");
 
-    const fileName = "GenUI-Code.html"
+    const fileName = `GenUI-Code.${frameWork.ext || 'html'}`;
     const blob = new Blob([code], { type: 'text/plain' });
     let url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -221,7 +312,7 @@ Requirements:
                 {/* Editor / Preview */}
                 <div className="h-full">
                   {tab === 1 ? (
-                    <Editor value={code} height="100%" theme='vs-dark' language="html" />
+                    <Editor value={code} height="100%" theme='vs-dark' language={frameWork.lang || 'html'} />
                   ) : (
                     <iframe key={refreshKey} srcDoc={code} className="w-full h-full bg-white text-black"></iframe>
                   )}
